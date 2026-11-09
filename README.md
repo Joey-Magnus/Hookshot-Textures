@@ -54,8 +54,9 @@ python -m hstex.cli build --out work/packs/01-HD-Textures --romfs ~/Games/Ocarin
 | `topaz-cgi` | fal.ai | | over-paints |
 | `esrgan` | fal.ai | a few dollars | close to plain resizing |
 
-Local models take about 6 s for a 1024-pixel texture on an RTX 4070 Ti (one at a time on the GPU while the other
-`--jobs` threads encode). `--limit` caps how many textures one run builds. The full set is about 4,900 textures.
+Local models run on the GPU in batches of 16 (one model load a batch) while the other `--jobs` threads decode and
+encode; use `--jobs 20` or more so batches fill. On an RTX 4070 Ti that is about 20 textures a minute for the large
+ones (Upscayl's models work at 4x internally). `--limit` caps how many textures one run builds. The full set is about 4,900 textures.
 
 The local models are Upscayl's, downloaded from [Upscayl's repository](https://github.com/upscayl/upscayl) when used and
 not included here. Each has its own licence; 4x-UltraSharp (by Kim2091) is CC BY-NC-SA 4.0, so a pack made with it is
