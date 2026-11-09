@@ -62,7 +62,9 @@ def _offsets(width_bytes: int, height_blocks: int, bh: int) -> np.ndarray:
     gobs_per_row = div_up(width_bytes, GOB_W)
     gob = (y // (GOB_H * bh)) * (gobs_per_row * bh * GOB_SIZE) + (x // GOB_W) * (bh * GOB_SIZE) \
         + ((y % (GOB_H * bh)) // GOB_H) * GOB_SIZE
-    inner = ((x % 64) // 32) * 256 + ((y % 8) // 2) * 64 + ((x % 32) // 16) * 32 + (y % 2) * 16 + (x % 16)
+    # (the Switch 2 GOB: bits 5 and 6 hold row bit 1 and column bit 4, the other way round from the Switch 1's)
+    inner = (((x & 63) >> 5) << 8) | (((y & 7) >> 2) << 7) | (((x & 31) >> 4) << 6) | (((y >> 1) & 1) << 5) \
+        | ((y & 1) << 4) | (x & 15)
     return gob + inner
 
 
