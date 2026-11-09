@@ -1,4 +1,4 @@
-"""2x upscaling through fal.ai. Colour goes to the model wrap-padded (tiling textures keep seamless edges) and is
+"""2x upscaling, locally with Upscayl (hstex/upscayl.py: the upscayl-* models) or through fal.ai. Colour goes to the model wrap-padded (tiling textures keep seamless edges) and is
 cropped back; alpha is scaled apart (Lanczos), since the models drop it. Results are cached by model and input hash."""
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from pathlib import Path
 import httpx
 import numpy as np
 from PIL import Image
+
+from . import upscayl
 
 KEY_FILE = Path.home() / ".config/fal/key"
 CACHE = Path(__file__).resolve().parents[1] / "work/cache"
@@ -68,7 +70,7 @@ def upscale2x(rgba: np.ndarray, model: str, client: httpx.Client) -> np.ndarray:
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(_call(model, png, client))
+        tmp.write_bytes(upscayl.run(model, png) if model in upscayl.MODELS else _call(model, png, client))
         tmp.rename(path)
     up = np.asarray(Image.open(path).convert("RGB"))
     full_h, full_w = rgb.shape[0] * 2, rgb.shape[1] * 2

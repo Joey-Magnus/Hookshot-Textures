@@ -1,11 +1,12 @@
 """hstex: Hookshot OoT texture packs.
 
-  python -m hstex.cli build --model seedvr --out work/packs/01-HD-Textures [--match REGEX] [--limit N] [--jobs 8]
+  python -m hstex.cli build [--model upscayl-ultrasharp] --out work/packs/01-HD-Textures [--match REGEX] [--limit N]
   python -m hstex.cli install work/packs/01-HD-Textures [--game ~/Games/OcarinaOfTime]
 
-build: every single-layer Alb texture (or those matching --match) upscaled 2x with the fal.ai model, BC7, written
-to <out>/romfs/Tex. Textures already in <out> are skipped, so a stopped run resumes; fal.ai results are cached by
-input, so a rebuild costs nothing. --limit: at most N textures this run (a spend cap).
+build: every single-layer Alb texture (or those matching --match) upscaled 2x, BC7, written to <out>/romfs/Tex.
+--model: upscayl-* run free on this PC's GPU (Upscayl, downloaded on first use); the others are paid fal.ai models
+(key in ~/.config/fal/key). Textures already in <out> are skipped, so a stopped run resumes; upscaled results are cached
+by input, so a rebuild costs nothing. --limit: at most N textures this run (a spend cap with fal.ai).
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from pathlib import Path
 
 import httpx
 
-from . import bntx, encode, fal, rstb, zs
+from . import bntx, encode, fal, rstb, upscayl, zs
 
 GAME = Path.home() / "Games/OcarinaOfTime"
 
@@ -84,7 +85,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="hstex")
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
-    b.add_argument("--model", default="seedvr", choices=sorted(fal.MODELS))
+    b.add_argument("--model", default="upscayl-ultrasharp", choices=sorted(upscayl.MODELS) + sorted(fal.MODELS))
     b.add_argument("--out", required=True)
     b.add_argument("--romfs", default=str(GAME / "romfs"))
     b.add_argument("--kind", default="Alb")

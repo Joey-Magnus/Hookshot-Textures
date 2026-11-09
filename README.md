@@ -2,7 +2,8 @@
 
 An HD texture pack builder for *The Legend of Zelda: Ocarina of Time* (Nintendo Switch 2) running on
 [Hookshot](https://github.com/NotRexed/Hookshot). It reads the colour textures from **your own** game files, upscales them
-2x with an AI model on [fal.ai](https://fal.ai), and writes them back as a Hookshot RomFS mod.
+2x with an AI model, and writes them back as a Hookshot RomFS mod. By default the upscaling runs free on your own GPU
+with [Upscayl](https://upscayl.org)'s models; paid models on [fal.ai](https://fal.ai) are an option.
 
 **No game data is in this repository, and none should leave your PC.** The pack you build is made from Nintendo's
 textures: keep it to yourself, as Hookshot's
@@ -12,7 +13,7 @@ textures: keep it to yourself, as Hookshot's
 
 1. Reads `romfs/Tex/*_Alb.bntx.zs` (zstd with the game's `ZsDic` dictionaries), parses BNTX/BRTI, unswizzles the Switch 2
    block-linear layout and decodes ASTC / BC1-7.
-2. Upscales each colour (Alb) texture 2x on fal.ai. Tiling textures are wrap-padded first so no seams appear; alpha is
+2. Upscales each colour (Alb) texture 2x, locally with Upscayl or on fal.ai. Tiling textures are wrap-padded first so no seams appear; alpha is
    resized apart (Lanczos) so the model never sees it. Results are cached by input hash, so a rebuild costs nothing.
 3. Builds a linear-light mip chain, encodes BC7 (sRGB kept: desktop GPUs sample it natively), swizzles, rewrites the
    BNTX header and compresses with zstd.
@@ -25,23 +26,40 @@ Normal, roughness, AO and metal maps are data, not pictures, and stay at their s
 
 - Python 3.11+ and `pip install -r requirements.txt`
 - A Hookshot game folder (`hookshot`, `romfs/`), built from your own copy of the game
-- A fal.ai API key in `~/.config/fal/key` (`chmod 600` it)
+- For the free local models: a GPU with Vulkan (any recent NVIDIA, AMD or Intel). Upscayl's runner (`upscayl-bin`,
+  Linux / Windows / macOS) and the model are downloaded into `~/.cache/hstex/upscayl` on first use
+  (`HSTEX_UPSCAYL_DIR` moves it)
+- Only for the fal.ai models: an API key in `~/.config/fal/key` (`chmod 600` it)
 
 ## Use
 
 ```sh
-# a small area first: Kokiri Forest, 325 textures (about $8 and 10 minutes with topaz-std)
-python -m hstex.cli build --model topaz-std --match kokiri --out work/packs/01-HD-Textures \
-    --romfs ~/Games/OcarinaOfTime/romfs
+# a small area first: Kokiri Forest, 325 textures
+python -m hstex.cli build --match kokiri --out work/packs/01-HD-Textures --romfs ~/Games/OcarinaOfTime/romfs
 python -m hstex.cli install work/packs/01-HD-Textures --game ~/Games/OcarinaOfTime
 
 # then the rest into the same pack: what is already built is skipped
-python -m hstex.cli build --model topaz-std --out work/packs/01-HD-Textures --romfs ~/Games/OcarinaOfTime/romfs
+python -m hstex.cli build --out work/packs/01-HD-Textures --romfs ~/Games/OcarinaOfTime/romfs
 ```
 
-`--model`: `topaz-std` (Topaz Standard V2: the most faithful detail, the default to use), `seedvr` (cheaper, invents
-patterns), `topaz-cgi` (over-paints), `esrgan` (close to plain resizing). `--jobs` sets parallel calls, `--limit` caps
-how many textures one run builds. The full set is about 4,900 textures, roughly 2.5 hours at `--jobs 12`.
+`--model`:
+
+| Model | Where | Cost | Result |
+|---|---|---|---|
+| `upscayl-ultrasharp` (default) | your GPU | free | sharp and clean; keeps the texture's own structure |
+| `upscayl-hifi` | your GPU | free | like UltraSharp, a little softer |
+| `upscayl-standard` | your GPU | free | smooths fine grain away: not recommended for textures |
+| `topaz-std` | fal.ai | ~$95-180 for all | the most added fine detail, still faithful |
+| `seedvr` | fal.ai | ~$18 for all | invents patterns |
+| `topaz-cgi` | fal.ai | | over-paints |
+| `esrgan` | fal.ai | a few dollars | close to plain resizing |
+
+Local models take about 6 s for a 1024-pixel texture on an RTX 4070 Ti (one at a time on the GPU while the other
+`--jobs` threads encode). `--limit` caps how many textures one run builds. The full set is about 4,900 textures.
+
+The local models are Upscayl's, downloaded from [Upscayl's repository](https://github.com/upscayl/upscayl) when used and
+not included here. Each has its own licence; 4x-UltraSharp (by Kim2091) is CC BY-NC-SA 4.0, so a pack made with it is
+not for commercial use.
 
 Restart the game after installing (Hookshot indexes mods at start). `hookshot_log.txt` lists the mod and its files. Rename
 the folder with a leading `_` to turn it off.
