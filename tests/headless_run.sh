@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless run into gameplay from the latest save: ./headless_run.sh <mods dir> [extra env...]
+# Headless run into gameplay from the latest save: [GAME=<game folder>] ./headless_run.sh <mods dir> [extra env...]
 # Presses A (Continue, the newest save, Load) until a frame has gameplay's draw count, then waits 30 s more.
 # Frames every 2 s in /tmp/oot-shots, console in /tmp/oot-run.out, the last frame at /tmp/oot-s.png.
 # Leaves the game running; kill -9 $(cat /tmp/oot-headless.pid) to stop.
@@ -11,7 +11,7 @@ PIDFILE=/tmp/oot-headless.pid
 if [ -f $PIDFILE ]; then kill -9 "$(cat $PIDFILE)" 2>/dev/null || true; rm -f $PIDFILE; fi
 while pgrep -x hookshot >/dev/null; do sleep 2; done
 rm -rf /tmp/oot-shots && mkdir -p /tmp/oot-shots && : > /tmp/oot-live.txt
-cd "$HOME/Games/OcarinaOfTime"
+cd "${GAME:-$HOME/Games/OcarinaOfTime}"
 env HOS_HEADLESS=1 HOS_MODS="$mods" RX_VK_SHOTS=/tmp/oot-shots RX_VK_SHOT_EVERY=120 HOS_INPUT_LIVE=/tmp/oot-live.txt \
     HOS_INPUT_SCRIPT_BACKGROUND=1 RX_VK_ANISO=16 "$@" setsid ./hookshot </dev/null >/tmp/oot-run.out 2>&1 &
 echo $! > $PIDFILE
