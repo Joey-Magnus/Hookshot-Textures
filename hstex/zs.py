@@ -39,5 +39,13 @@ def decompress(blob: bytes, romfs: str) -> bytes:
     return z.stream_reader(io.BytesIO(blob)).read()
 
 
+def content_size(head: bytes) -> int:
+    """The decompressed size a frame header records (compress writes it)."""
+    size = zstandard.get_frame_parameters(head).content_size
+    if size in (zstandard.CONTENTSIZE_UNKNOWN, zstandard.CONTENTSIZE_ERROR):
+        raise ValueError("frame without its content size")
+    return size
+
+
 def compress(data: bytes, level: int = 16) -> bytes:
     return zstandard.ZstdCompressor(level=level, write_content_size=True).compress(data)
