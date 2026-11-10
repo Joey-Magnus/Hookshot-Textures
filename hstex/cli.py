@@ -94,6 +94,36 @@ def rstb_cmd(args) -> int:
     return 0
 
 
+def lite_cmd(args) -> int:
+    """A pack sized to the texture heap, from a full 2x pack (hstex/lite.py)"""
+    from concurrent.futures import ProcessPoolExecutor
+    from . import lite
+    full_tex = Path(args.full, "romfs/Tex")
+    out_tex = Path(args.out, "romfs/Tex")
+    out_tex.mkdir(parents=True, exist_ok=True)
+    names = sorted(p.name for p in full_tex.glob("*.bntx.zs"))
+    counts: dict[str, int] = {}
+    grow = 0
+    t0 = time.time()
+    with ProcessPoolExecutor(args.jobs) as ex:
+        futs = [ex.submit(lite.build_one, n, args.romfs, full_tex, out_tex, args.max_orig, args.zstd) for n in names]
+        for i, f in enumerate(futs, 1):
+            r = f.result()
+            counts[r.action] = counts.get(r.action, 0) + 1
+            grow += r.new_bytes - r.orig_bytes
+            if i % 250 == 0 or i == len(futs):
+                print(f"{i}/{len(futs)} {counts} growth {grow / 2**20:.0f} MB, {time.time() - t0:.0f} s", flush=True)
+    return 0
+
+
+def heap_cmd(args) -> int:
+    from . import heap
+    r = heap.write_mod(args.romfs, Path(args.game, "mods", args.name), args.extra_mb * 1024)
+    print(f"TextureHeap {r['before_kb']['TextureHeap']} -> {r['after_kb']['TextureHeap']} KB; top-level heaps "
+          f"{r['top_level_mb']:.0f} of {heap.GAME_HEAP_MB} MB; {r['out']}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="hstex")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -113,8 +143,20 @@ def main() -> int:
                                     "removed or turned on or off)")
     r.add_argument("--game", default=str(GAME))
     r.add_argument("--romfs", help="the game's own romfs (default: <game>/romfs)")
+    lt = sub.add_parser("lite", help="a pack sized to the game's texture heap, from a full 2x pack")
+    lt.add_argument("--full", required=True, help="the full 2x pack (its folder, with romfs/Tex)")
+    lt.add_argument("--out", required=True)
+    lt.add_argument("--romfs", default=str(GAME / "romfs"))
+    lt.add_argument("--max-orig", type=int, default=512, help="2x only for originals up to this many pixels a side")
+    lt.add_argument("--jobs", type=int, default=12)
+    lt.add_argument("--zstd", type=int, default=12)
+    hp = sub.add_parser("heap", help="a HeapDef mod giving TextureHeap more of the game's heap")
+    hp.add_argument("--game", default=str(GAME))
+    hp.add_argument("--romfs", default=str(GAME / "romfs"))
+    hp.add_argument("--name", default="05-HeapSize")
+    hp.add_argument("--extra-mb", type=int, default=700)
     args = ap.parse_args()
-    return {"build": build, "install": install, "rstb": rstb_cmd}[args.cmd](args)
+    return {"build": build, "install": install, "rstb": rstb_cmd, "lite": lite_cmd, "heap": heap_cmd}[args.cmd](args)
 
 
 if __name__ == "__main__":

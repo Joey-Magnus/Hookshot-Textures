@@ -172,8 +172,24 @@ def decode_mip0(t: Texture) -> np.ndarray:
         if fn is None:
             raise ValueError(f"no decoder for {name}")
         bgra = fn(lin, pw, ph)
-    a = np.frombuffer(bgra, dtype=np.uint8).reshape(ph, pw, 4)[..., [2, 1, 0, 3]]
+    a = np.frombuffer(bgra, dtype=np.uint8).reshape(ph, pw, 4)[..., [2, 1, 0, 3]].copy()
+    if name == "BC1":
+        a[..., 3] = bc1_alpha(lin, pw, ph)
     return a[: t.height, : t.width].copy()
+
+
+def bc1_alpha(lin: bytes, pw: int, ph: int) -> np.ndarray:
+    """BC1's punch-through alpha, which texture2ddecoder drops (it gives 255 everywhere): in a block whose first colour
+    is not above its second (the 3-colour mode), index 3 is transparent black. The game's foliage uses it for its
+    cut-outs (Plant_Kokiri_FernOsmund_A_01_Alb: 64% of its pixels); decoded opaque, the pack drew them as black blocks."""
+    b = np.frombuffer(lin, dtype=np.uint8).reshape(ph // 4, pw // 4, 8)
+    c0 = b[..., 0].astype(np.uint16) | (b[..., 1].astype(np.uint16) << 8)
+    c1 = b[..., 2].astype(np.uint16) | (b[..., 3].astype(np.uint16) << 8)
+    bits = np.unpackbits(b[..., 4:8], axis=-1, bitorder="little").reshape(ph // 4, pw // 4, 4, 4, 2)
+    sel = bits[..., 0] | (bits[..., 1] << 1)   # (block row, block col, y, x)
+    transparent = (sel == 3) & (c0 <= c1)[..., None, None]
+    alpha = np.where(transparent, 0, 255).astype(np.uint8)
+    return alpha.transpose(0, 2, 1, 3).reshape(ph, pw)
 
 
 def build(t: Texture, width: int, height: int, mip_blocks: list[bytes], fmt_type: int) -> bytes:

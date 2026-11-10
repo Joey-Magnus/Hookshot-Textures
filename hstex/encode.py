@@ -52,3 +52,20 @@ def encode_bc7(t: bntx.Texture, rgba: np.ndarray) -> bytes:
     h, w = rgba.shape[:2]
     levels = mip_chain(rgba, t.mips, t.srgb)
     return bntx.build(t, w, h, [bc7_blocks(l) for l in levels], 0x20)
+
+
+def bc1_blocks(rgba: np.ndarray) -> bytes:
+    """Linear BC1 block rows (opaque, 4-colour blocks only); edge-padded to whole 4x4 blocks."""
+    h, w = rgba.shape[:2]
+    ph, pw = bntx.div_up(h, 4) * 4, bntx.div_up(w, 4) * 4
+    if (ph, pw) != (h, w):
+        rgba = np.pad(rgba, ((0, ph - h), (0, pw - w), (0, 0)), mode="edge")
+    return etcpak.compress_bc1(np.ascontiguousarray(rgba).tobytes(), pw, ph)
+
+
+def encode_bc1(t: bntx.Texture, rgba: np.ndarray) -> bytes:
+    """t with an OPAQUE rgba (any size) as BC1: half of BC7's 8 bits a pixel. Only for pictures without alpha: BC1's
+    one transparent colour is not used, so a cut-out would come out opaque."""
+    h, w = rgba.shape[:2]
+    levels = mip_chain(rgba, t.mips, t.srgb)
+    return bntx.build(t, w, h, [bc1_blocks(l) for l in levels], 0x1A)
