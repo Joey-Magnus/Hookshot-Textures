@@ -368,6 +368,37 @@ def set_path(root, path: str, value, create: bool = False):
     return old
 
 
+def patch_int(d: bytes, path: str, value: int) -> bytes:
+    """The file with the 32-bit int (0xD1) or uint (0xD3) at a dict-only path ('A.B.C') changed in place; every
+    other byte stays as it was."""
+    ko = struct.unpack_from("<I", d, 4)[0]
+    off = struct.unpack_from("<I", d, 12)[0]
+    n = struct.unpack_from("<I", d, ko)[0] >> 8
+    offs = struct.unpack_from("<%dI" % (n + 1), d, ko + 4)
+    key_ix = {d[ko + o:d.index(b"\0", ko + o)].decode("utf-8"): i for i, o in enumerate(offs[:n])}
+    names = path.split(".")
+    for depth, name in enumerate(names):
+        if d[off] != 0xC1:
+            raise BymlError("%s: not a dict at %#x" % (path, off))
+        count = struct.unpack_from("<I", d, off)[0] >> 8
+        want = key_ix.get(name)
+        for i in range(count):
+            e = off + 4 + 8 * i
+            if want is not None and struct.unpack_from("<I", d, e)[0] & 0xFFFFFF == want:
+                break
+        else:
+            raise KeyError(path)
+        t = d[e + 3]
+        if depth < len(names) - 1:
+            off = struct.unpack_from("<I", d, e + 4)[0]
+            continue
+        if t not in (0xD1, 0xD3):
+            raise BymlError("%s holds type %#x, not an int" % (path, t))
+        out = bytearray(d)
+        struct.pack_into("<i" if t == 0xD1 else "<I", out, e + 4, value)
+        return bytes(out)
+
+
 def coerce(value, like):
     """value converted to the BYML type of like."""
     if like is None or isinstance(like, (dict, list)):

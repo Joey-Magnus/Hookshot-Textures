@@ -120,7 +120,9 @@ def heap_cmd(args) -> int:
     from . import heap
     r = heap.write_mod(args.romfs, Path(args.game, "mods", args.name), args.extra_mb * 1024)
     print(f"TextureHeap {r['before_kb']['TextureHeap']} -> {r['after_kb']['TextureHeap']} KB; top-level heaps "
-          f"{r['top_level_mb']:.0f} of {heap.GAME_HEAP_MB} MB; {r['out']}")
+          f"{r['top_level_mb']:.0f} MB; {r['out']}")
+    print(f"needs HOS_MEMORY_MB={r['memory_mb']} (or more) in the game's hookshot_env.txt: without it the game crashes "
+          f"at start past about +300 MB")
     return 0
 
 
