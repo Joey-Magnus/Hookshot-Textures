@@ -66,6 +66,19 @@ class Rstb:
         out.write_bytes(zs.compress(self.dump()))
         return grown
 
+    def merge(self, other: "Rstb") -> int:
+        """Every entry of another table grown into this one (the larger size kept). Returns how many grew."""
+        grown = 0
+        for c, s in other.crc.items():
+            if self.crc.get(c, 0) < s:
+                self.crc[c] = s
+                grown += 1
+        for name, s in other.names.items():
+            if self.names.get(name, 0) < s:
+                self.names[name] = s
+                grown += 1
+        return grown
+
     def dump(self) -> bytes:
         out = bytearray(b"RESTBL")
         out += struct.pack("<IIII", self.version, self.name_len, len(self.crc), len(self.names))
@@ -74,3 +87,66 @@ class Rstb:
         for name in sorted(self.names):
             out += name.encode().ljust(self.name_len, b"\0") + struct.pack("<I", self.names[name])
         return bytes(out)
+
+
+TABLE_MOD = "99-ResourceSizeTable"
+
+
+def mod_romfs_dirs(mods: Path) -> list[tuple[str, Path]]:
+    """(mod name, its romfs folder) for every enabled mod, in the loader's order (by name; '-' or '_' first turns a mod
+    off). A mod is mods/<name>/romfs, or deeper (mods/contents/<title id>/<name>/romfs) as emulators lay them out. The
+    table's own mod is left out"""
+    found = []
+    for romfs in sorted(mods.rglob("romfs")):
+        if not romfs.is_dir():
+            continue
+        parts = romfs.relative_to(mods).parts
+        if len(parts) < 2 or any(p.startswith(("-", "_")) for p in parts[:-1]) or parts[-2] == TABLE_MOD:
+            continue
+        if any(p == "romfs" for p in parts[:-1]):   # (a folder named romfs inside a mod's own romfs)
+            continue
+        found.append(("/".join(parts[:-1]), romfs))
+    return sorted(found, key=lambda m: m[0])
+
+
+def file_need(f: Path) -> int:
+    """The entry a mod file needs: its decompressed size (.zs: from the frame header) plus the loader's overhead"""
+    if f.name.endswith(".zs"):
+        with open(f, "rb") as fh:
+            return zs.content_size(fh.read(32)) + OVERHEAD
+    return f.stat().st_size + OVERHEAD
+
+
+def regenerate(game: str | Path, romfs: str | Path | None = None) -> dict:
+    """mods/99-ResourceSizeTable rebuilt from the game's own table and every enabled mod: each mod file's entry grown
+    to fit it, and the entries of any table a mod ships merged in (only the last mod's table is used, which is this one).
+    Entries only grow. Run again after a mod is installed, removed or turned on or off"""
+    game = Path(game)
+    romfs = str(romfs or game / "romfs")
+    table = Rstb.load(romfs)
+    mods = game / "mods"
+    report = {"mods": [], "grown": 0, "tables": []}
+    for name, mod_romfs in mod_romfs_dirs(mods) if mods.is_dir() else []:
+        files = 0
+        for f in mod_romfs.rglob("*"):
+            if not f.is_file():
+                continue
+            rel = f.relative_to(mod_romfs).as_posix()
+            if rel == NAME:
+                report["grown"] += table.merge(Rstb(zs.decompress(f.read_bytes(), romfs)))
+                report["tables"].append(name)
+                continue
+            path = rel[:-3] if rel.endswith(".zs") else rel
+            need = file_need(f)
+            files += 1
+            if (table.get(path) or 0) < need:
+                table.set(path, need)
+                report["grown"] += 1
+        report["mods"].append((name, files))
+    out = mods / TABLE_MOD / "romfs" / NAME
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(out.name + ".tmp")
+    tmp.write_bytes(zs.compress(table.dump()))
+    tmp.replace(out)
+    report["out"] = str(out)
+    return report

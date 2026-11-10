@@ -2,6 +2,10 @@
 
   python -m hstex.cli build [--model upscayl-ultrasharp] --out work/packs/01-HD-Textures [--match REGEX] [--limit N]
   python -m hstex.cli install work/packs/01-HD-Textures [--game ~/Games/OcarinaOfTime]
+  python -m hstex.cli rstb [--game ~/Games/OcarinaOfTime]
+
+rstb: mods/99-ResourceSizeTable rebuilt from the game's table and every enabled mod (install runs it too). Run it after
+a mod is added, removed or turned on or off.
 
 build: every single-layer Alb texture (or those matching --match) upscaled 2x, BC7, written to <out>/romfs/Tex.
 --model: upscayl-* run free on this PC's GPU (Upscayl, downloaded on first use); the others are paid fal.ai models
@@ -78,6 +82,15 @@ def install(args) -> int:
     shutil.copytree(pack, dest)
     n = sum(1 for _ in dest.rglob("*.bntx.zs"))
     print(f"{n} textures installed in {dest} (rename it with a leading '_' to turn it off)")
+    return rstb_cmd(args)
+
+
+def rstb_cmd(args) -> int:
+    """mods/99-ResourceSizeTable from the game's table and every enabled mod (see rstb.regenerate)"""
+    r = rstb.regenerate(args.game, getattr(args, "romfs", None))
+    for name, files in r["mods"]:
+        print(f"  {name}: {files} files" + ("  (its own size table merged)" if name in r["tables"] else ""))
+    print(f"resource size table: {r['grown']} entries grown, written to {r['out']}; restart the game", flush=True)
     return 0
 
 
@@ -96,8 +109,12 @@ def main() -> int:
     i = sub.add_parser("install")
     i.add_argument("pack")
     i.add_argument("--game", default=str(GAME))
+    r = sub.add_parser("rstb", help="rebuild mods/99-ResourceSizeTable from every enabled mod (after a mod is added, "
+                                    "removed or turned on or off)")
+    r.add_argument("--game", default=str(GAME))
+    r.add_argument("--romfs", help="the game's own romfs (default: <game>/romfs)")
     args = ap.parse_args()
-    return {"build": build, "install": install}[args.cmd](args)
+    return {"build": build, "install": install, "rstb": rstb_cmd}[args.cmd](args)
 
 
 if __name__ == "__main__":

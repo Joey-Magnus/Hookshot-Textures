@@ -72,8 +72,17 @@ size by CRC32 of its path (without `.zs`); for textures it is the decompressed s
 **silently does not load**: the game keeps the original, or a loading screen waits forever. The builder writes a grown
 copy of the table into the pack (`hstex/rstb.py`).
 
-Hookshot replaces whole files, and the mod whose folder sorts last wins, so only one mod's table is used. If you combine
-this pack with other mods that grow files, their entries must be merged into one table in the last mod.
+Hookshot replaces whole files, and the mod whose folder sorts last wins, so only one mod's table is used. So the table
+lives in its own mod, `mods/99-ResourceSizeTable`, which sorts last:
+
+```sh
+python -m hstex.cli rstb [--game ~/Games/OcarinaOfTime]
+```
+
+starts from the game's own table, grows the entry of every file in every enabled mod (folders starting with `-` or `_`
+are off; `mods/<name>/romfs` and the emulators' deeper `mods/contents/<title id>/<name>/romfs` are both read) to its size
++ 280, and merges in any table a mod ships itself. Entries only grow. `install` runs it; run it yourself after adding,
+removing or turning off any other mod, then restart the game.
 
 ## Switch 2 texture layout
 
